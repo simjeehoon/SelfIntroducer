@@ -261,7 +261,7 @@ class Application(tk.Tk):
         self.create_menu_bar()
         self.create_widgets()
 
-        self.add_new_company("새 회사 1")
+        #self.add_new_company("새 회사 1")
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def on_closing(self):
@@ -733,14 +733,14 @@ class Application(tk.Tk):
                 current_question = {"제목": "제목 없음", "질문": "", "답변": "", "문항유형": ""}
                 in_answer_section = False
 
-            elif line.startswith('[제목]:') and current_question:
+            elif line.startswith('<<제목>>:') and current_question:
                 current_question['제목'] = line.split(':', 1)[1].strip()
-            elif line.startswith('[유형]:') and current_question:
+            elif line.startswith('<<유형>>:') and current_question:
                 current_question['문항유형'] = line.split(':', 1)[1].strip()
 
-            elif line == '[질문]' and current_question:
+            elif line == '<<질문>>' and current_question:
                 in_answer_section = False
-            elif line == '[답변]' and current_question:
+            elif line == '<<답변>>' and current_question:
                 in_answer_section = True
 
             elif line == '--- 문항 끝 ---' and current_company and current_question:
@@ -783,13 +783,13 @@ class Application(tk.Tk):
 
             for data in questions:
                 formatted_text += "--- 문항 시작 ---\n"
-                formatted_text += f"[제목]: {data.get('제목', '제목 없음')}\n"
-                formatted_text += f"[유형]: {data.get('문항유형', '')}\n"
+                formatted_text += f"<<제목>>: {data.get('제목', '제목 없음')}\n"
+                formatted_text += f"<<유형>>: {data.get('문항유형', '')}\n"
 
-                formatted_text += "[질문]\n"
+                formatted_text += "<<질문>>\n"
                 formatted_text += f"{data.get('질문', '')}\n"
 
-                formatted_text += "[답변]\n"
+                formatted_text += "<<답변>>\n"
                 formatted_text += f"{data.get('답변', '')}\n"
 
                 formatted_text += "--- 문항 끝 ---\n"
