@@ -197,9 +197,10 @@ class QuestionFrame(ttk.Frame):
         self.count_display.grid(row=2, column=0, columnspan=2, padx=5, pady=(5, 0), sticky="ew")
 
         # 태그 설정: 숫자만 크게, 색깔 다르게
-        self.count_display.tag_config('count_all', foreground='#0A7959', font=('Arial', 12, 'bold'))  # 진한 녹색
-        self.count_display.tag_config('count_no_space', foreground='#00008B', font=('Arial', 12, 'bold'))  # 진한 파란색
+        self.count_display.tag_config('count_all', foreground='#00008B', font=('Arial', 12, 'bold'))  # 진한 파란색
+        self.count_display.tag_config('count_no_space', foreground='#0A7959', font=('Arial', 12, 'bold'))  # 진한 녹색
         self.count_display.tag_config('normal', font=('Arial', 10, 'normal'))
+
 
     def update_char_count(self, event=None):
         """답변 텍스트를 분석하여 글자수를 실시간으로 업데이트하고, tk.Text에 태그를 적용하여 표시합니다."""
