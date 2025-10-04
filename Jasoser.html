@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회사 및 문항 관리형 자소서 작성 도구</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter 폰트 설정 및 전체 화면 사용 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; 
+            padding: 0;
+            margin: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow-x: hidden; 
+            overflow-y: hidden;
+        }
+        
+        textarea.resize {
+            resize: vertical; /* 수직 방향으로만 크기 조절 가능 */
+            min-height: 80px; /* 질문 최소 높이 */
+        }
+
+        #item-editor-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease;
+        }
+
+        /* 질문 영역(#question)에만 최대 높이 및 스크롤 설정 */
+        #question {
+            /* 16줄 제한: 16줄 * 24px (Line-height) + 24px (p-3 vertical padding) = 408px */
+            max-height: 408px; 
+            overflow-y: auto; /* max-height 초과 시 스크롤바 활성화 */
+        }
+
+        #answer {
+            flex-grow: 1;
+            min-height: 200px; /* 최소 높이 설정 */
+        }
+
+        .list-item, .app-list-item, .search-result-item {
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 2px solid transparent;
+        }
+        .list-item:hover, .app-list-item:hover, .search-result-item:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="p-0 m-0 h-screen w-screen">
+
+    <!-- Main Flex Container: App List (1/5) + Item Manager (1/5) + Editor (3/5) -->
+    <div class="flex h-full w-full">
+        
+        <!-- 1. Leftmost Sidebar (회사/App 목록) -->
+        <div id="app-list-sidebar" class="w-1/5 h-full bg-gray-50 border-r border-gray-200 shadow-xl flex flex-col min-w-[200px]">
+            <div class="p-4 border-b border-gray-200 bg-white">
+                
+                <!-- [MODIFIED] 회사 목록 헤더: 제목과 저장/불러오기 버튼 -->
+                <div class="flex justify-between items-center relative">
+                    <h3 class="text-sm font-bold uppercase text-gray-700">회사 목록</h3>
+                    <div class="flex space-x-2">
+                        <!-- 💾 저장 버튼 (디스켓) -->
+                        <div class="relative">
+                            <button id="save-data-btn" title="데이터 저장" class="p-1 w-7 h-7 flex items-center justify-center text-gray-700 bg-gray-200 rounded-full shadow-md hover:bg-green-100 transition duration-150 transform hover:scale-105 active:scale-95">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                            </button>
+                            <!-- 저장 형식 선택 드롭다운 -->
+                            <div id="save-dropdown" class="absolute left-0 mt-2 w-32 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none hidden z-20 transform -translate-x-full">
+                                <button id="save-json-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">JSON 파일 (.json)</button>
+                                <button id="save-text-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg">Text 파일 (.txt)</button>
+                            </div>
+                        </div>
+                        
+                        <!-- ⤒ 불러오기 버튼 (업로드) -->
+                        <button id="load-data-btn" title="데이터 불러오기" class="p-1 w-7 h-7 flex items-center justify-center text-gray-700 bg-gray-200 rounded-full shadow-md hover:bg-blue-100 transition duration-150 transform hover:scale-105 active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 overflow-y-auto flex-grow">
+                
+                <!-- 필터/검색 버튼 및 회사 추가/제거 버튼 -->
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex space-x-2">
+                        <!-- 검색 버튼 -->
+                        <button id="search-toggle-btn" title="전체 문항 검색" class="px-3 py-1 text-xs font-bold text-white bg-indigo-500 rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 transform hover:scale-[1.02] active:scale-[0.98]">
+                            검색
+                        </button>
+                        <!-- 필터 버튼: 오른쪽 공간을 필터 메뉴로 전환합니다. -->
+                        <button id="filter-toggle-btn" title="회사 상태 필터" class="p-1 w-7 h-7 text-xs flex items-center justify-center font-bold text-white bg-gray-500 rounded-full shadow-md hover:bg-gray-600 transition duration-150 transform hover:scale-105 active:scale-95">
+                            <!-- Filter icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 13.414V17a1 1 0 01-1 1h-2a1 1 0 01-1-1v-3.586L3.293 6.707A1 1 0 013 6V4z" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- 회사 추가/제거 버튼 -->
+                    <div class="flex space-x-2">
+                        <button id="add-app-btn" title="회사 추가" class="p-1 w-7 h-7 text-xs flex items-center justify-center font-bold text-white bg-green-600 rounded-full shadow-md hover:bg-green-700 transition duration-150 transform hover:scale-105 active:scale-95">
+                            +
+                        </button>
+                        <button id="remove-app-btn" title="선택 회사 제거" class="p-1 w-7 h-7 text-xs flex items-center justify-center font-bold text-gray-700 bg-gray-200 rounded-full shadow-md hover:bg-red-100 transition duration-150 transform hover:scale-105 active:scale-95">
+                            X
+                        </button>
+                    </div>
+                </div>
+                
+                <ul id="app-list" class="space-y-1">
+                    <!-- 회사 목록 항목들이 여기에 동적으로 렌더링 됩니다 -->
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 2. Middle Sidebar (선택된 회사/문항 목록 OR 필터 메뉴 OR 검색 메뉴) -->
+        <div id="item-manager-sidebar" class="w-1/5 h-full bg-slate-100 border-r border-gray-200 shadow-2xl flex flex-col min-w-[280px] relative">
+            
+            <!-- 원래의 회사 상세 정보 및 문항 목록 -->
+            <div id="original-content-container" class="flex flex-col h-full w-full">
+                
+                <!-- 애플리케이션 상세 정보 (회사명, 날짜, 상태) 섹션 -->
+                <div id="app-details-section" class="p-4 border-b border-gray-200 bg-white space-y-3">
+                    <h3 class="text-sm font-bold uppercase text-gray-700 mb-3">선택된 회사</h3>
+                    
+                    <!-- 회사명 -->
+                    <div class="flex items-center space-x-2">
+                        <label for="app-company" class="font-bold text-gray-700 text-sm flex-shrink-0 w-12">회사명</label>
+                        <input type="text" id="app-company" class="p-1 border border-gray-300 rounded-lg text-base flex-grow focus:ring-cyan-500 focus:border-cyan-500 min-w-0" placeholder="회사/직무">
+                    </div>
+
+                    <!-- 날짜 및 상태를 수직으로 정렬 -->
+                    <div class="space-y-3">
+                        <!-- 날짜 -->
+                        <div class="flex items-center space-x-2">
+                            <label for="app-date" class="font-bold text-gray-700 text-sm flex-shrink-0 w-12">날짜</label>
+                            <input type="date" id="app-date" class="p-1 border border-gray-300 rounded-lg text-base flex-grow focus:ring-cyan-500 focus:border-cyan-500">
+                        </div>
+                        
+                        <!-- 상태 -->
+                        <div class="flex items-center space-x-2">
+                            <label for="app-status" class="font-bold text-gray-700 text-sm flex-shrink-0 w-12">상태</label>
+                            <select id="app-status" class="p-1 border border-gray-300 rounded-lg text-base flex-grow focus:ring-cyan-500 focus:border-cyan-500">
+                                <option value="기본" selected>기본</option>
+                                <option value="서합">서합</option>
+                                <option value="서탈">서탈</option>
+                                <option value="면접">면접</option>
+                                <option value="합격">합격</option>
+                                <option value="1차면접">1차면접</option>
+                                <option value="2차면접">2차면접</option>
+                                <option value="최종면접">최종면접</option>
+                                <option value="테스트">테스트</option>
+                                <option value="포폴">포폴</option>
+                                <option value="과제">과제</option>
+                                <option value="메모">메모</option>
+                                <option value="TIP">TIP</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 문항 목록 섹션 -->
+                <div class="p-4 overflow-y-auto flex-grow">
+                    
+                    <!-- 문항 목록 라벨과 버튼을 한 줄에 배치 -->
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold uppercase text-gray-700">문항 목록</h3>
+                        
+                        <!-- 작게 줄여서 배치된 버튼들 -->
+                        <div class="flex space-x-2">
+                            <button id="add-item-btn" title="문항 추가" class="p-1 w-7 h-7 text-xs flex items-center justify-center font-bold text-white bg-cyan-600 rounded-full shadow-md hover:bg-cyan-700 transition duration-150 transform hover:scale-105 active:scale-95">
+                                +
+                            </button>
+                            <button id="remove-item-btn" title="선택 문항 제거" class="p-1 w-7 h-7 text-xs flex items-center justify-center font-bold text-gray-700 bg-gray-200 rounded-full shadow-md hover:bg-red-100 transition duration-150 transform hover:scale-105 active:scale-95">
+                                X
+                            </button>
+                        </div>
+                    </div>
+
+                    <ul id="item-list" class="space-y-1">
+                        <!-- 문항 목록 항목들이 여기에 동적으로 렌더링 됩니다 -->
+                    </ul>
+                </div>
+            </div> <!-- End of #original-content-container -->
+
+            <!-- 필터 메뉴 (Middle Sidebar의 공간을 사용) -->
+            <div id="filter-menu" class="hidden absolute inset-0 p-4 bg-gray-100 flex flex-col overflow-y-auto">
+                
+                <!-- 필터 헤더 -->
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-300 bg-gray-100 sticky top-0 z-10">
+                    <h4 class="text-lg font-bold text-gray-800">회사 상태 필터</h4>
+                    <button id="close-filter-btn" title="필터 닫기" class="p-1 text-gray-500 hover:text-red-500 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Action Buttons: 전체 선택/해제/회사만 -->
+                <div class="flex space-x-2 mb-4">
+                    <button id="select-all-btn" class="flex-grow px-3 py-1 text-sm font-bold text-white bg-indigo-500 rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 transform hover:scale-[1.01] active:scale-[0.99]">
+                        전체 선택
+                    </button>
+                    <button id="select-none-btn" class="flex-grow px-3 py-1 text-sm font-bold text-gray-700 bg-gray-200 rounded-lg shadow-md hover:bg-gray-300 transition duration-150 transform hover:scale-[1.01] active:scale-[0.99]">
+                        전체 해제
+                    </button>
+                    <button id="select-company-only-btn" class="flex-grow px-3 py-1 text-sm font-bold text-white bg-cyan-600 rounded-lg shadow-md hover:bg-cyan-700 transition duration-150 transform hover:scale-[1.01] active:scale-[0.99]">
+                        회사만
+                    </button>
+                </div>
+
+                <!-- 체크박스 목록이 들어갈 곳 (1열 목록 형태로 변경) -->
+                <div id="status-checkboxes" class="grid grid-cols-1 gap-1 text-sm flex-grow">
+                    <!-- Checkboxes will be rendered here by JavaScript -->
+                </div>
+                
+            </div>
+
+            <!-- 검색 메뉴 -->
+            <div id="search-menu" class="hidden absolute inset-0 p-4 bg-gray-100 flex flex-col overflow-y-auto">
+        
+                <!-- 검색 헤더 -->
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-300 bg-gray-100 sticky top-0 z-10">
+                    <h4 class="text-lg font-bold text-gray-800">문항 검색</h4>
+                    <button id="close-search-btn" title="검색 닫기" class="p-1 text-gray-500 hover:text-red-500 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- 검색 입력 필드 -->
+                <input type="text" id="search-input" placeholder="회사명, 질문, 답변, 유형 검색..." class="w-full p-2 mb-4 border border-indigo-400 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-base shadow-md">
+
+                <!-- 검색 필터 설정 버튼 -->
+                <div class="mb-4 flex justify-between items-center pt-2 border-t border-gray-300">
+                    <p class="text-sm font-bold text-gray-700 ml-1">검색 대상 필드</p>
+                    <button id="open-search-filter-modal-btn" class="px-3 py-1 text-xs font-bold text-white bg-indigo-500 rounded-lg shadow-md hover:bg-indigo-600 transition duration-150 transform hover:scale-[1.02] active:scale-[0.98]">
+                        필터 설정 (0 / 4)
+                    </button>
+                </div>
+
+                <!-- 검색 결과 목록 -->
+                <div class="mb-2">
+                    <p id="search-info" class="text-sm text-gray-500 font-medium ml-1">검색어를 입력해주세요.</p>
+                </div>
+                <div id="search-results-container" class="space-y-3 flex-grow overflow-y-auto">
+                    <!-- Results will be displayed here -->
+                </div>
+                
+            </div>
+
+        </div> <!-- End of #item-manager-sidebar -->
+
+        <!-- 3. Right Main Content (문항 작성 에디터) -->
+        <div class="w-3/5 h-full p-4 md:p-8 overflow-y-auto flex-grow">
+
+            <!-- 에디터 영역 (기존의 item-1 블록) -->
+            <div id="item-editor-container" class="rounded-xl shadow-2xl border border-gray-200 p-6 bg-white">
+                
+                <!-- 0. 문항 관리 헤더 (제목, 타입, 질문 유형, 읽기 전용) -->
+                <div class="mb-4 pb-2 space-y-4">
+                    
+                    <!-- 1행: 문항 제목 (전체 공간 점유) + 읽기 전용 (가장 오른쪽) -->
+                    <div class="flex flex-wrap items-center gap-4 md:gap-6">
+                        
+                        <!-- 문항 제목 라벨 및 Input (남은 공간 전체 차지) -->
+                        <div class="flex flex-grow items-center space-x-2 min-w-40">
+                            <label for="item-title" class="font-bold text-gray-700 text-sm flex-shrink-0 w-20">문항 제목</label>
+                            <input type="text" id="item-title" class="p-2 border border-gray-300 rounded-lg text-base flex-grow focus:ring-cyan-500 focus:border-cyan-500" placeholder="예: 지원 동기 및 포부">
+                        </div>
+
+                        <!-- 읽기 전용 (Checkbox - 1번째 행, 가장 오른쪽에 위치) -->
+                        <div class="flex items-center flex-shrink-0 select-none ml-auto">
+                            <input type="checkbox" id="is-readonly" class="h-4 w-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500 cursor-pointer">
+                            <label for="is-readonly" class="font-bold text-gray-700 text-base ml-2 cursor-pointer">읽기 전용</label>
+                        </div>
+                    </div>
+
+                    <!-- 2행: 문항 타입 + 질문 유형 (각각 절반씩 공간 점유) -->
+                    <div class="flex flex-wrap items-center gap-4 md:gap-6">
+                        
+                        <!-- 문항 타입 (Dropdown - 수평 정렬, 약 40% 공간) -->
+                        <div class="flex items-center space-x-2 w-full md:w-auto md:flex-grow">
+                            <label for="item-type-select" class="font-bold text-gray-700 text-sm flex-shrink-0 w-20">문항 타입</label>
+                            <select id="item-type-select" class="p-2 border border-gray-300 rounded-lg text-base w-full focus:ring-cyan-500 focus:border-cyan-500">
+                                <option value="자소서" selected>자소서</option>
+                                <option value="기술">기술</option>
+                                <option value="메모">메모</option>
+                                <option value="방법">방법</option>
+                                <option value="예시">예시</option>
+                                <option value="TIP">TIP</option>
+                            </select>
+                        </div>
+
+                        <!-- 질문 유형 라벨 및 Input (수평 정렬, 나머지 공간 점유) -->
+                        <div class="flex items-center space-x-2 w-full md:w-auto md:flex-grow">
+                            <label for="item-tag-type" class="font-bold text-gray-700 text-sm flex-shrink-0 w-20">질문 유형</label>
+                            <input type="text" id="item-tag-type" class="p-2 border border-gray-300 rounded-lg text-base w-full focus:ring-cyan-500 focus:border-cyan-500 flex-grow" placeholder="예: 성장과정, 직무경험">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. 질문 (Full Width) -->
+                <div class="mb-4">
+                    <label for="question" class="block text-xl font-bold text-gray-700 mb-2">
+                        질문
+                    </label>
+                    <textarea id="question" class="w-full resize p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 transition duration-150 text-base" rows="5" placeholder="질문을 입력하세요." aria-label="질문 입력 영역"></textarea>
+                </div>
+
+                <!-- 2. 답변 (Full Width & Expanded) -->
+                <div class="flex flex-col flex-grow">
+                    
+                    <!-- 라벨과 글자수 측정 결과를 한 줄에 정렬 -->
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="answer" class="text-xl font-bold text-gray-700">
+                            답변
+                        </label>
+                        <!-- 글자수 측정 결과 (라벨 옆에 위치) -->
+                        <div id="char-count-display" class="text-base flex space-x-4 font-mono">
+                            <span class="count-with-spaces text-blue-600 font-semibold">공백 포함: 0자</span>
+                            <span class="count-without-spaces text-green-600 font-semibold">공백 제외: 0자</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 답변 textarea가 남은 공간을 모두 차지하도록 flex-grow 사용 -->
+                    <textarea id="answer" class="w-full resize p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 transition duration-150 text-base overflow-y-auto" placeholder="여기에 답변을 작성하세요." aria-label="답변 입력 영역"></textarea>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- Custom Modal UI for Confirmation -->
+    <div id="confirm-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4 text-red-600">확인</h3>
+            <p id="modal-message" class="mb-6 text-gray-700">이 문항을 정말로 삭제하시겠습니까?</p>
+            <div class="flex justify-end space-x-3">
+                <button id="modal-cancel-btn" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition">취소</button>
+                <button id="modal-confirm-btn" class="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition">확인</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Modal UI for Messages/Alerts -->
+    <div id="message-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 id="message-modal-title" class="text-xl font-bold mb-4 text-indigo-600">알림</h3>
+            <p id="message-modal-message" class="mb-6 text-gray-700">성공적으로 처리되었습니다.</p>
+            <div class="flex justify-end">
+                <button id="message-modal-close-btn" class="px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal UI for Search Field Filters -->
+    <div id="search-filter-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 class="text-xl font-bold mb-4 text-indigo-600">검색 필드 선택</h3>
+            <p class="mb-4 text-sm text-gray-600">검색을 원하는 필드(회사명, 질문, 답변, 유형)를 선택해주세요.</p>
+
+            <div id="search-filter-checkboxes-modal" class="grid grid-cols-2 gap-3 mb-6">
+                <!-- Checkboxes will be rendered here -->
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button id="search-filter-modal-close-btn" class="px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden File Input for Loading -->
+    <input type="file" id="file-loader" class="hidden" accept=".json, .txt">
+
+    <script>
+        // ===============================================
+        // 1. 데이터 구조 및 전역 상태
+        // ===============================================
+
+        // 문항 데이터의 기본 구조
+        const defaultItem = (num) => ({
+            id: Date.now() + Math.random(),
+            title: `새 문항 #${num}`,
+            type: "자소서",
+            tags: "",
+            question: "",
+            answer: "",
+            isReadOnly: false
+        });
+        
+        // 애플리케이션(회사) 데이터의 기본 구조
+        const defaultApplication = (num) => {
+            const appId = crypto.randomUUID();
+            return {
+                id: appId,
+                company: `새 회사 #${num}`,
+                date: new Date().toISOString().substring(0, 10),
+                status: "기본",
+                // 각 애플리케이션은 자체 문항 목록을 가집니다.
+                items: [defaultItem(1)] 
+            };
+        };
+
+        // 전역 상태 변수
+        let applications = [defaultApplication(1)]; // 모든 애플리케이션(회사)을 담는 배열
+        let selectedAppId = applications[0].id;     // 현재 선택된 애플리케이션 ID
+        let selectedItemIndex = 0;                  // 현재 선택된 문항의 인덱스
+        let modalResolve = null;                    // 커스텀 모달 Promise Resolver
+        
+        // 필터링 상태 관리 - 실시간 적용을 위해 activeStatuses를 직접 사용
+        let activeStatuses = [];                    // 실제로 목록 렌더링에 사용되는 활성 상태 필터
+        
+        // 검색 상태 관리
+        let searchResults = [];                     // 마지막 검색 결과 저장
+        let lastSearchQuery = '';                   // 마지막 검색 쿼리 저장
+        
+        // 검색 필터 상태 관리
+        const searchFields = ["회사명", "질문", "답변", "유형"];
+        let activeSearchFilters = [...searchFields]; // 기본값: 모든 필터 활성화
+        
+        // '회사' 그룹으로 묶일 상태 목록 (합격 포함)
+        const companyStatuses = ["기본", "서합", "서탈", "면접", "합격", "1차면접", "2차면접", "최종면접", "테스트"];
+        
+        // 모든 가능한 상태 목록 (순서: 드롭다운 순서를 따름)
+        const filterOrder = ["기본", "서합", "서탈", "면접", "합격", "1차면접", "2차면접", "최종면접", "테스트", "포폴", "과제", "메모", "TIP"];
+
+
+        // ===============================================
+        // 2. HTML 요소 참조
+        // ===============================================
+        const editorContainer = document.getElementById('item-editor-container');
+        
+        // 회사/App 목록 요소
+        const appListUl = document.getElementById('app-list');
+        const addAppBtn = document.getElementById('add-app-btn');
+        const removeAppBtn = document.getElementById('remove-app-btn');
+        const filterToggleButton = document.getElementById('filter-toggle-btn'); 
+        const searchToggleButton = document.getElementById('search-toggle-btn'); 
+
+        // [NEW] 저장/불러오기 요소
+        const saveDataBtn = document.getElementById('save-data-btn');
+        const loadDataBtn = document.getElementById('load-data-btn');
+        const saveDropdown = document.getElementById('save-dropdown');
+        const saveJsonBtn = document.getElementById('save-json-btn');
+        const saveTextBtn = document.getElementById('save-text-btn');
+        const fileLoader = document.getElementById('file-loader');
+        
+        // Middle Sidebar Container References
+        const originalContentContainer = document.getElementById('original-content-container');
+        const filterMenu = document.getElementById('filter-menu'); 
+        const closeFilterBtn = document.getElementById('close-filter-btn'); 
+        const statusCheckboxesDiv = document.getElementById('status-checkboxes'); 
+        const searchMenu = document.getElementById('search-menu');           
+        const searchInput = document.getElementById('search-input');         
+        const searchResultsContainer = document.getElementById('search-results-container'); 
+        const closeSearchBtn = document.getElementById('close-search-btn');  
+        const searchInfo = document.getElementById('search-info');           
+        
+        // 검색 필터 모달 요소
+        const searchFilterModal = document.getElementById('search-filter-modal');
+        const openSearchFilterModalBtn = document.getElementById('open-search-filter-modal-btn');
+        const searchFilterCheckboxesModalDiv = document.getElementById('search-filter-checkboxes-modal');
+        const searchFilterModalCloseBtn = document.getElementById('search-filter-modal-close-btn');
+        
+        // Filter Action Buttons
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const selectCompanyOnlyBtn = document.getElementById('select-company-only-btn');
+        const selectNoneBtn = document.getElementById('select-none-btn'); 
+
+        // App 상세 정보 요소
+        const appCompanyInput = document.getElementById('app-company');
+        const appDateInput = document.getElementById('app-date');
+        const appStatusSelect = document.getElementById('app-status');
+
+        // 문항 목록 요소
+        const itemListUl = document.getElementById('item-list');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const removeItemBtn = document.getElementById('remove-item-btn');
+
+        // 문항 편집기 요소
+        const titleInput = document.getElementById('item-title');
+        const typeSelect = document.getElementById('item-type-select');
+        const tagsInput = document.getElementById('item-tag-type');
+        const readonlyCheckbox = document.getElementById('is-readonly');
+        const questionTextarea = document.getElementById('question');
+        const answerTextarea = document.getElementById('answer');
+        
+        // 모달 요소
+        const confirmModal = document.getElementById('confirm-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        
+        const messageModal = document.getElementById('message-modal');
+        const messageModalTitle = document.getElementById('message-modal-title');
+        const messageModalMessage = document.getElementById('message-modal-message');
+        const messageModalCloseBtn = document.getElementById('message-modal-close-btn');
+
+
+        // ===============================================
+        // 3. 데이터 관리 헬퍼 함수
+        // ===============================================
+
+        /**
+         * 헬퍼: 현재 선택된 애플리케이션 객체를 반환합니다.
+         */
+        function getCurrentApplication() {
+            return applications.find(app => app.id === selectedAppId);
+        }
+
+        /**
+         * 헬퍼: 현재 문항 데이터 객체를 반환합니다.
+         */
+        function getCurrentItem() {
+            const app = getCurrentApplication();
+            if (app && app.items.length > 0) {
+                 // 선택된 인덱스가 유효한지 확인하고 조정
+                if (selectedItemIndex >= app.items.length) {
+                    selectedItemIndex = Math.max(0, app.items.length - 1);
+                }
+                return app.items[selectedItemIndex];
+            }
+            return null;
+        }
+
+        /**
+         * 헬퍼: 현재 편집기 필드의 값을 문항 데이터에 저장합니다.
+         */
+        function saveCurrentItem() {
+            const currentItem = getCurrentItem();
+            if (!currentItem) return;
+
+            // UI에서 변경된 내용을 상태에 반영
+            currentItem.title = titleInput.value;
+            currentItem.type = typeSelect.value;
+            currentItem.tags = tagsInput.value;
+            currentItem.question = questionTextarea.value;
+            currentItem.answer = answerTextarea.value;
+            currentItem.isReadOnly = readonlyCheckbox.checked;
+
+            // 문항 목록 UI 업데이트
+            renderSidebar();
+        }
+
+        /**
+         * 애플리케이션 상단 정보 (회사명, 상태, 날짜)를 저장합니다.
+         */
+        function saveApplicationData() {
+            const app = getCurrentApplication();
+            if (!app) return;
+            
+            const oldDate = app.date;
+            const oldStatus = app.status;
+            
+            app.company = appCompanyInput.value;
+            app.status = appStatusSelect.value;
+            app.date = appDateInput.value;
+            
+            // 상태나 날짜가 변경되었을 경우 회사 목록 UI 업데이트를 강제
+            // appCompanyInput.value가 변경될 경우에도 renderAppList가 호출되도록 
+            // setEventListeners에서 별도로 처리함 (실시간 반영)
+            if (oldStatus !== app.status || oldDate !== app.date) {
+                 renderAppList();
+            }
+        }
+
+        /**
+         * 헬퍼: 텍스트 영역의 높이를 내용에 따라 자동으로 확장합니다.
+         * 최대 높이는 CSS의 max-height (408px, 16줄)에 의해 제어됩니다.
+         */
+        function autoExpandQuestionTextarea(element) {
+            if (!element) return;
+            // 1. 높이를 'auto'로 설정하여 스크롤바를 숨기고 현재 내용에 맞게 줄입니다.
+            element.style.height = 'auto';
+            
+            // 2. scrollHeight를 사용하여 텍스트가 모두 보이도록 높이를 설정합니다.
+            // 이때 CSS의 max-height가 적용되어 16줄을 초과하면 스크롤바가 활성화됩니다.
+            element.style.height = (element.scrollHeight) + 'px';
+        }
+
+
+        // ===============================================
+        // 4. UI 렌더링 및 업데이트
+        // ===============================================
+        
+        /**
+         * 문항 타입에 따라 배경색 클래스를 반환합니다. (에디터 본문용 - 밝은 배경)
+         */
+        function getEditorColorClass(type) {
+            switch (type) {
+                case '기술': return 'bg-lime-100';
+                case '메모': return 'bg-yellow-100'; // 연한 노란색
+                case '방법': return 'bg-violet-100';
+                case '예시': return 'bg-rose-100';
+                case 'TIP': return 'bg-purple-100'; // 연한 보라색
+                case '자소서':
+                default: return 'bg-white';
+            }
+        }
+
+        /**
+         * 문항 타입에 따라 배경색 클래스를 반환합니다. (목록 항목용 - 미선택)
+         */
+        function getListColorClass(type) {
+            switch (type) {
+                case '기술': return 'bg-lime-200';
+                case '메모': return 'bg-yellow-200'; // 연한 노란색
+                case '방법': return 'bg-violet-200';
+                case '예시': return 'bg-rose-200';
+                case 'TIP': return 'bg-purple-200'; // 연한 보라색
+                case '자소서':
+                default: return 'bg-blue-50';
+            }
+        }
+        
+        /**
+         * 문항 타입에 따라 선택되었을 때의 색상 클래스를 반환합니다. (목록 항목용 - 선택됨)
+         */
+        function getSelectedColorClasses(type) {
+            switch (type) {
+                case '기술': return { bg: 'bg-green-700', border: 'border-green-400' };
+                case '메모': return { bg: 'bg-amber-700', border: 'border-amber-400' }; 
+                case '방법': return { bg: 'bg-fuchsia-700', border: 'border-fuchsia-400' };
+                case '예시': return { bg: 'bg-red-700', border: 'border-red-400' };
+                case 'TIP': return { bg: 'bg-purple-700', border: 'border-purple-400' }; 
+                case '자소서':
+                default: return { bg: 'bg-blue-700', border: 'border-blue-400' };
+            }
+        }
+        
+        /**
+         * 문항 타입에 따라 배경색을 변경합니다.
+         */
+        function updateBackgroundColor(type) {
+            const itemContainer = editorContainer;
+            if (!itemContainer) return;
+
+            const selectedType = type || '자소서'; // 기본값 설정
+            
+            // 모든 잠재적인 배경색 클래스 목록 (bg-*-100)
+            const allColors = ['bg-lime-100', 'bg-yellow-100', 'bg-violet-100', 'bg-rose-100', 'bg-purple-100', 'bg-white'];
+
+            // 기존 색상 클래스 모두 제거
+            allColors.forEach(cls => itemContainer.classList.remove(cls));
+
+            // 새로운 색상 클래스 추가
+            itemContainer.classList.add(getEditorColorClass(selectedType));
+        }
+        
+        /**
+         * 회사 상태에 따라 목록 항목의 배경색 클래스를 반환합니다.
+         * 반환 시, 미선택 배경색과 기본 텍스트 색상을 포함합니다.
+         */
+        function getAppListStatusColorClass(status) {
+            // 기본~테스트 + 합격까지는 bg-white와 중립적인 border 사용
+            if (companyStatuses.includes(status)) {
+                return { 
+                    bgClass: 'bg-white', 
+                    borderClass: 'border-gray-300', 
+                    textClass: 'text-gray-800',
+                    selectedBgClass: 'bg-gray-200', // 선택 시 배경색
+                    selectedBorderClass: 'border-gray-500', // 선택 시 테두리색
+                    selectedTextClass: 'text-gray-900' // 선택 시 텍스트색
+                };
+            }
+            switch (status) {
+                case '포폴': return { 
+                    bgClass: 'bg-purple-100', 
+                    borderClass: 'border-purple-300', 
+                    textClass: 'text-purple-900',
+                    selectedBgClass: 'bg-purple-600', 
+                    selectedBorderClass: 'border-purple-400', 
+                    selectedTextClass: 'text-white' 
+                };
+                case '과제': return { 
+                    bgClass: 'bg-amber-100', 
+                    borderClass: 'border-amber-300', 
+                    textClass: 'text-amber-900',
+                    selectedBgClass: 'bg-amber-600', 
+                    selectedBorderClass: 'border-amber-400', 
+                    selectedTextClass: 'text-white' 
+                };
+                case '메모': return { 
+                    bgClass: 'bg-sky-100', 
+                    borderClass: 'border-sky-300', 
+                    textClass: 'text-sky-900',
+                    selectedBgClass: 'bg-sky-600', 
+                    selectedBorderClass: 'border-sky-400', 
+                    selectedTextClass: 'text-white' 
+                };
+                case 'TIP': return { 
+                    bgClass: 'bg-indigo-100', 
+                    borderClass: 'border-indigo-300', 
+                    textClass: 'text-indigo-900',
+                    selectedBgClass: 'bg-indigo-600', 
+                    selectedBorderClass: 'border-indigo-400', 
+                    selectedTextClass: 'text-white' 
+                };
+                default: return { 
+                    bgClass: 'bg-gray-100', 
+                    borderClass: 'border-gray-300', 
+                    textClass: 'text-gray-800',
+                    selectedBgClass: 'bg-gray-300', 
+                    selectedBorderClass: 'border-gray-500', 
+                    selectedTextClass: 'text-gray-900' 
+                };
+            }
+        }
+        
+        /**
+         * 헬퍼: 날짜 최신순으로 애플리케이션을 정렬합니다. (내림차순)
+         */
+        function sortApplicationsByDate(apps) {
+            return [...apps].sort((a, b) => {
+                const dateA = new Date(a.date);
+                const dateB = new Date(b.date);
+                // 내림차순 (최신 날짜가 앞으로)
+                return dateB.getTime() - dateA.getTime();
+            });
+        }
+
+        /**
+         * 회사 목록을 사이드바에 다시 그립니다. (정렬 및 필터링 적용)
+         */
+        function renderAppList() {
+            // 1. 정렬: 날짜 최신순으로 정렬
+            let displayApps = sortApplicationsByDate(applications);
+
+            // 2. 필터링: 활성 필터 상태를 확인하여 필터링을 적용합니다.
+            if (activeStatuses.length > 0) {
+                displayApps = displayApps.filter(app => activeStatuses.includes(app.status));
+            } else if (applications.length > 0 && filterOrder.length > 0) {
+                 // activeStatuses가 비어있고, 필터 옵션이 존재하면 (전체 해제 상태),
+                 // 목록에 아무것도 표시하지 않습니다.
+                 displayApps = [];
+            }
+
+            appListUl.innerHTML = ''; // 목록 초기화
+
+            if (displayApps.length === 0) {
+                appListUl.innerHTML = '<li class="text-sm text-gray-500 p-2">표시할 회사가 없습니다. (필터 확인)</li>';
+                return;
+            }
+
+            displayApps.forEach(app => {
+                const li = document.createElement('li');
+                
+                // 항목 높이를 줄이기 위해 p-1.5, flex 사용
+                let classes = 'app-list-item p-1.5 rounded-lg transition-all duration-150 shadow-sm flex flex-col border-2';
+                const isSelected = app.id === selectedAppId;
+                const colorConfig = getAppListStatusColorClass(app.status);
+
+
+                if (isSelected) {
+                    // ⭐ [수정] 선택된 항목 스타일: 고유 상태 색상을 기반으로 진하게 설정
+                    classes += ` font-bold ${colorConfig.selectedTextClass} ${colorConfig.selectedBgClass} border-4 ${colorConfig.selectedBorderClass} shadow-lg`;
+                    companyTextSize = 'text-base';
+                    textColor = colorConfig.selectedTextClass;
+                } else {
+                    // 미선택 항목 상태별 색상 적용
+                    classes += ` ${colorConfig.textClass} ${colorConfig.bgClass} ${colorConfig.borderClass}`;
+                    classes += ' hover:border-cyan-300';
+                    companyTextSize = 'text-sm';
+                    textColor = colorConfig.textClass;
+                }
+                
+                li.className = classes;
+                
+                const companyName = app.company.trim() || `(회사명 없음)`;
+                
+                // 상태가 '기본'일 경우 상태 텍스트를 숨김
+                const statusText = (app.status === '기본') ? '' : app.status;
+
+                // 회사명, 상태, 날짜를 포함하도록 innerHTML 재구성 (compact layout)
+                li.innerHTML = `
+                    <div class="${companyTextSize} font-semibold truncate leading-tight ${textColor}">${companyName}</div>
+                    <div class="flex justify-between items-center text-xs ${textColor} opacity-90 pt-0.5">
+                        <span class="font-medium">${statusText}</span>
+                        <span class="opacity-80">${app.date}</span>
+                    </div>
+                `;
+
+                li.addEventListener('click', () => {
+                    saveCurrentItem();
+                    saveApplicationData();
+
+                    selectedAppId = app.id;
+                    selectedItemIndex = 0;
+                    renderAppAndItemData();
+                    
+                    // 회사 목록에서 클릭 시, 검색/필터 메뉴가 열려 있다면 닫음
+                    if (!searchMenu.classList.contains('hidden')) toggleSearchMenu(false);
+                    if (!filterMenu.classList.contains('hidden')) toggleFilterMenu(false);
+                });
+
+                appListUl.appendChild(li);
+            });
+            
+            // 제거 버튼 활성화/비활성화
+            removeAppBtn.disabled = applications.length <= 1;
+            removeAppBtn.classList.toggle('opacity-50', applications.length <= 1);
+            removeAppBtn.classList.toggle('cursor-not-allowed', applications.length <= 1);
+        }
+
+        /**
+         * 애플리케이션 상단 정보 (회사명, 상태, 날짜)를 UI에 로드합니다.
+         */
+        function renderApplicationData() {
+            const app = getCurrentApplication();
+            if (!app) return;
+
+            appCompanyInput.value = app.company;
+            appDateInput.value = app.date;
+            appStatusSelect.value = app.status;
+        }
+
+        /**
+         * 문항 목록을 사이드바에 다시 그립니다.
+         */
+        function renderSidebar() {
+            const app = getCurrentApplication();
+
+            if (!app) {
+                itemListUl.innerHTML = '<li class="text-sm text-gray-500 p-2">선택된 회사가 없습니다.</li>';
+                return;
+            }
+
+            itemListUl.innerHTML = ''; // 목록 초기화
+
+            app.items.forEach((item, index) => {
+                const li = document.createElement('li');
+                
+                let classes = 'list-item p-2 rounded-lg truncate transition-all duration-150 border-2 border-gray-400 text-gray-800';
+                classes += ' ' + getListColorClass(item.type);
+
+                if (index === selectedItemIndex) {
+                    const selectedClasses = getSelectedColorClasses(item.type);
+                    classes = `list-item p-2 rounded-lg truncate transition-all duration-150 font-bold text-white ${selectedClasses.bg} border-4 ${selectedClasses.border} shadow-lg`;
+                } else {
+                    classes += ' hover:border-cyan-300';
+                }
+                
+                li.className = classes;
+                li.textContent = item.title.trim() || `(제목 없음 #${index + 1})`;
+
+                li.addEventListener('click', () => {
+                    // 현재 편집 중이던 내용 저장
+                    saveCurrentItem();
+                    // 새 문항 선택
+                    selectedItemIndex = index;
+                    renderCurrentItem();
+                });
+
+                itemListUl.appendChild(li);
+            });
+            
+            // 문항 제거 버튼 활성화/비활성화
+            removeItemBtn.disabled = app.items.length === 0;
+            removeItemBtn.classList.toggle('opacity-50', app.items.length === 0);
+            removeItemBtn.classList.toggle('cursor-not-allowed', app.items.length === 0);
+        }
+
+        /**
+         * 선택된 문항의 데이터를 에디터에 로드합니다.
+         */
+        function renderCurrentItem() {
+            const item = getCurrentItem();
+            const app = getCurrentApplication();
+
+            if (!item || !app) {
+                // 문항이 없을 경우 에디터를 비활성화
+                titleInput.value = '';
+                typeSelect.value = '자소서';
+                tagsInput.value = '';
+                questionTextarea.value = '';
+                answerTextarea.value = '';
+                readonlyCheckbox.checked = false;
+                
+                updateBackgroundColor('자소서');
+                updateCharCount();
+                
+                // 에디터 필드 비활성화
+                disableEditorFields(true);
+                return;
+            }
+
+            // 에디터 필드 활성화
+            disableEditorFields(false);
+
+            // 데이터 로드
+            titleInput.value = item.title;
+            typeSelect.value = item.type;
+            tagsInput.value = item.tags;
+            questionTextarea.value = item.question;
+            answerTextarea.value = item.answer;
+            readonlyCheckbox.checked = item.isReadOnly;
+            
+           
+            // 타입에 따라 배경색 업데이트
+            updateBackgroundColor(item.type);
+            
+            // 문항 로드 시 질문 영역 높이 초기화/재계산
+            autoExpandQuestionTextarea(questionTextarea); 
+
+            // 글자수 업데이트
+            updateCharCount();
+            
+            // 읽기 전용 상태에 따라 필드 상태 변경
+            updateReadOnlyState(item.isReadOnly);
+            
+            // 문항 목록 UI 업데이트
+            renderSidebar();
+        }
+        
+        /**
+         * 문항이 없거나 선택되지 않았을 때 에디터 필드를 비활성화/활성화합니다.
+         */
+        function disableEditorFields(isDisabled) {
+            [titleInput, typeSelect, tagsInput, questionTextarea, answerTextarea, readonlyCheckbox].forEach(el => {
+                el.disabled = isDisabled;
+                el.classList.toggle('opacity-50', isDisabled);
+            });
+        }
+        
+        /**
+         * 문항의 읽기 전용 상태에 따라 에디터 필드의 상태를 업데이트합니다.
+         */
+        function updateReadOnlyState(isReadOnly) {
+            const item = getCurrentItem();
+            if (!item) return;
+            
+            // 체크박스 자체는 항상 활성화 (읽기 전용 상태 변경 가능)
+            
+            // 나머지 필드는 읽기 전용이면 비활성화
+            [titleInput, typeSelect, tagsInput, questionTextarea, answerTextarea].forEach(el => {
+                el.disabled = isReadOnly;
+                el.classList.toggle('bg-gray-100', isReadOnly); // 읽기 전용 시 배경색 변경
+            });
+        }
+
+        /**
+         * 회사 정보와 문항 정보를 모두 새로 그립니다. (회사 변경 시 사용)
+         */
+        function renderAppAndItemData() {
+            renderApplicationData();
+            renderSidebar();
+            renderCurrentItem();
+            renderAppList();
+        }
+
+        // ===============================================
+        // 5. 이벤트 핸들러 및 리스너 설정
+        // ===============================================
+
+        /**
+         * 글자 수를 계산하여 UI에 표시합니다.
+         */
+        function updateCharCount() {
+            const text = answerTextarea.value;
+            const countWithSpaces = text.length;
+            // 정규식: 모든 공백 문자(스페이스, 탭, 줄바꿈)를 제거
+            const countWithoutSpaces = text.replace(/\s/g, '').length; 
+
+            document.querySelector('.count-with-spaces').textContent = `공백 포함: ${countWithSpaces}자`;
+            document.querySelector('.count-without-spaces').textContent = `공백 제외: ${countWithoutSpaces}자`;
+        }
+
+        /**
+         * 사용자에게 확인을 요청하는 커스텀 모달을 띄웁니다.
+         * @returns {Promise<boolean>} 사용자의 확인(true) 또는 취소(false) 결과
+         */
+        function showConfirmModal(message) {
+            return new Promise(resolve => {
+                modalResolve = resolve;
+                modalMessage.textContent = message;
+                confirmModal.classList.remove('hidden');
+                confirmModal.classList.add('flex');
+            });
+        }
+
+        /**
+         * 사용자에게 메시지를 보여주는 커스텀 모달을 띄웁니다.
+         */
+        function showMessageModal(title, message) {
+            messageModalTitle.textContent = title;
+            messageModalMessage.textContent = message;
+            messageModal.classList.remove('hidden');
+            messageModal.classList.add('flex');
+        }
+
+        /**
+         * 필터 메뉴의 활성 상태를 토글합니다.
+         */
+        function toggleFilterMenu(show) {
+            const shouldShow = show !== undefined ? show : filterMenu.classList.contains('hidden');
+            
+            if (shouldShow) {
+                // 필터 메뉴 열기
+                renderFilterCheckboxes();
+                filterMenu.classList.remove('hidden');
+                filterMenu.classList.add('flex');
+                
+                // 검색 메뉴 및 원래 내용 숨기기
+                searchMenu.classList.add('hidden');
+                originalContentContainer.classList.add('hidden');
+            } else {
+                // 필터 메뉴 닫기
+                filterMenu.classList.add('hidden');
+                filterMenu.classList.remove('flex');
+                
+                // 원래 내용 보이기
+                originalContentContainer.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * 검색 메뉴의 활성 상태를 토글합니다.
+         */
+        function toggleSearchMenu(show) {
+            const shouldShow = show !== undefined ? show : searchMenu.classList.contains('hidden');
+
+            if (shouldShow) {
+                // 검색 메뉴 열기
+                searchMenu.classList.remove('hidden');
+                searchMenu.classList.add('flex');
+                
+                // 필터 메뉴 및 원래 내용 숨기기
+                filterMenu.classList.add('hidden');
+                originalContentContainer.classList.add('hidden');
+                searchInput.focus(); // 검색창에 포커스
+            } else {
+                // 검색 메뉴 닫기
+                searchMenu.classList.add('hidden');
+                searchMenu.classList.remove('flex');
+
+                // 원래 내용 보이기 (단, 필터 메뉴가 열려있지 않은 경우에만)
+                if (filterMenu.classList.contains('hidden')) {
+                    originalContentContainer.classList.remove('hidden');
+                }
+            }
+        }
+
+        /**
+         * 데이터 저장 버튼 드롭다운을 토글합니다.
+         */
+        function toggleSaveDropdown() {
+            saveDropdown.classList.toggle('hidden');
+        }
+        
+        // ===============================================
+        // 6. 데이터 로드/저장/검색/필터링 로직
+        // ===============================================
+
+        /**
+         * 전체 데이터를 JSON 파일로 다운로드합니다.
+         */
+        function downloadData(data, filename, type) {
+            const dataStr = "data:" + type + ";charset=utf-8," + encodeURIComponent(data);
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", filename);
+            document.body.appendChild(downloadAnchorNode); // for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        /**
+         * 검색 결과가 선택되었을 때, 해당 문항으로 이동합니다.
+         */
+        function handleSearchResultClick(appId, itemId) {
+            // 1. 현재 편집 중이던 내용 저장
+            saveCurrentItem();
+            saveApplicationData();
+            
+            // 2. 새로운 회사와 문항 인덱스 설정
+            selectedAppId = appId;
+            const app = getCurrentApplication();
+            if (app) {
+                const index = app.items.findIndex(item => item.id.toString() === itemId.toString());
+                selectedItemIndex = index !== -1 ? index : 0;
+            } else {
+                selectedItemIndex = 0;
+            }
+            
+            // 3. UI 업데이트
+            renderAppAndItemData();
+            
+            // 4. 검색 메뉴 닫기
+            toggleSearchMenu(false);
+
+            // 5. 해당 문항 위치로 스크롤 (에디터 영역이 보이도록)
+            editorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        /**
+         * 검색 결과를 목록에 렌더링합니다.
+         */
+        function renderSearchResults() {
+            searchResultsContainer.innerHTML = '';
+            
+            if (lastSearchQuery.length < 2) {
+                searchInfo.textContent = "검색어를 2자 이상 입력해주세요.";
+                return;
+            }
+
+            if (searchResults.length === 0) {
+                searchInfo.textContent = `"${lastSearchQuery}"에 대한 검색 결과가 없습니다.`;
+                return;
+            }
+
+            searchInfo.textContent = `총 ${searchResults.length}개의 결과가 발견되었습니다.`;
+
+            searchResults.forEach(result => {
+                const app = applications.find(a => a.id === result.appId);
+                const item = app ? app.items.find(i => i.id === result.itemId) : null;
+                
+                if (!app || !item) return;
+
+                const li = document.createElement('li');
+                li.className = 'search-result-item bg-white p-3 rounded-lg shadow-md border-2 border-gray-200 hover:border-indigo-400 transition-all duration-150';
+                li.dataset.appId = app.id;
+                li.dataset.itemId = item.id;
+                
+                li.innerHTML = `
+                    <div class="text-xs font-medium text-indigo-600 truncate mb-1">
+                        ${app.company} (${app.status})
+                    </div>
+                    <div class="text-sm font-bold text-gray-800 truncate mb-1">
+                        ${item.title.trim() || '(제목 없음)'} 
+                        <span class="text-xs font-medium text-gray-500 ml-1">(${item.type})</span>
+                    </div>
+                    <!-- 매칭된 스니펫 표시 (예시) -->
+                    <p class="text-xs text-gray-600 line-clamp-2 mt-1">
+                        ${result.snippet.length > 100 ? result.snippet.substring(0, 100) + '...' : result.snippet}
+                    </p>
+                `;
+                
+                li.addEventListener('click', () => handleSearchResultClick(result.appId, result.itemId));
+                searchResultsContainer.appendChild(li);
+            });
+        }
+        
+        /**
+         * 전체 데이터를 검색합니다.
+         */
+        function performSearch(query) {
+            lastSearchQuery = query.trim().toLowerCase();
+            searchResults = [];
+            
+            if (lastSearchQuery.length < 2) {
+                renderSearchResults();
+                return;
+            }
+            
+            applications.forEach(app => {
+                app.items.forEach(item => {
+                    let snippet = '';
+                    let matchFound = false;
+                    
+                    // 1. 회사명 검색
+                    if (activeSearchFilters.includes("회사명") && app.company.toLowerCase().includes(lastSearchQuery)) {
+                        snippet = `[회사명 매칭]: ${app.company}`;
+                        matchFound = true;
+                    } 
+                    
+                    // 2. 질문 검색
+                    else if (activeSearchFilters.includes("질문") && item.question.toLowerCase().includes(lastSearchQuery)) {
+                        snippet = `[질문 매칭]: ${item.question}`;
+                        matchFound = true;
+                    } 
+                    
+                    // 3. 답변 검색
+                    else if (activeSearchFilters.includes("답변") && item.answer.toLowerCase().includes(lastSearchQuery)) {
+                        snippet = `[답변 매칭]: ${item.answer}`;
+                        matchFound = true;
+                    }
+                    
+                    // 4. 유형 검색 (Type 또는 Tag)
+                    else if (activeSearchFilters.includes("유형") && 
+                             (item.type.toLowerCase().includes(lastSearchQuery) || 
+                              item.tags.toLowerCase().includes(lastSearchQuery))) {
+                        snippet = `[유형 매칭]: ${item.type}, ${item.tags}`;
+                        matchFound = true;
+                    }
+
+                    if (matchFound) {
+                        searchResults.push({
+                            appId: app.id,
+                            itemId: item.id,
+                            snippet: snippet // 실제로는 하이라이팅 로직이 더 복잡할 수 있음
+                        });
+                    }
+                });
+            });
+
+            renderSearchResults();
+        }
+        
+        /**
+         * 검색 필터 모달의 체크박스를 렌더링하고 상태를 업데이트합니다.
+         */
+        function renderSearchFilterCheckboxes() {
+            searchFilterCheckboxesModalDiv.innerHTML = '';
+            
+            searchFields.forEach(field => {
+                const isChecked = activeSearchFilters.includes(field);
+                
+                const div = document.createElement('div');
+                div.className = 'flex items-center select-none';
+                
+                div.innerHTML = `
+                    <input type="checkbox" id="search-filter-${field}" data-field="${field}" ${isChecked ? 'checked' : ''} 
+                           class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+                    <label for="search-filter-${field}" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer">
+                        ${field}
+                    </label>
+                `;
+                
+                const checkbox = div.querySelector('input');
+                checkbox.addEventListener('change', (event) => {
+                    const field = event.target.dataset.field;
+                    const isChecked = event.target.checked;
+                    
+                    if (isChecked) {
+                        if (!activeSearchFilters.includes(field)) {
+                            activeSearchFilters.push(field);
+                        }
+                    } else {
+                        activeSearchFilters = activeSearchFilters.filter(f => f !== field);
+                    }
+                    
+                    // 필터 버튼 텍스트 업데이트
+                    updateSearchFilterButtonText();
+                });
+                
+                searchFilterCheckboxesModalDiv.appendChild(div);
+            });
+            
+            updateSearchFilterButtonText();
+        }
+        
+        /**
+         * 검색 필터 버튼의 텍스트를 업데이트합니다.
+         */
+        function updateSearchFilterButtonText() {
+            openSearchFilterModalBtn.textContent = `필터 설정 (${activeSearchFilters.length} / ${searchFields.length})`;
+        }
+
+        /**
+         * 필터 메뉴의 체크박스를 렌더링합니다.
+         */
+        function renderFilterCheckboxes() {
+            statusCheckboxesDiv.innerHTML = '';
+            
+            filterOrder.forEach(status => {
+                const isChecked = activeStatuses.includes(status);
+                
+                const div = document.createElement('div');
+                div.className = 'flex items-center select-none p-1 rounded-md hover:bg-gray-200 transition-colors';
+                
+                div.innerHTML = `
+                    <input type="checkbox" id="status-filter-${status}" data-status="${status}" ${isChecked ? 'checked' : ''}
+                           class="h-4 w-4 text-gray-600 border-gray-300 rounded focus:ring-cyan-500 cursor-pointer">
+                    <label for="status-filter-${status}" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer">
+                        ${status}
+                    </label>
+                `;
+                
+                const checkbox = div.querySelector('input');
+                checkbox.addEventListener('change', handleStatusCheckboxChange);
+                
+                statusCheckboxesDiv.appendChild(div);
+            });
+        }
+        
+        /**
+         * 상태 필터 체크박스의 변경을 처리합니다.
+         */
+        function handleStatusCheckboxChange(event) {
+            const status = event.target.dataset.status;
+            const isChecked = event.target.checked;
+
+            if (isChecked) {
+                if (!activeStatuses.includes(status)) {
+                    activeStatuses.push(status);
+                }
+            } else {
+                activeStatuses = activeStatuses.filter(s => s !== status);
+            }
+            
+            renderAppList();
+        }
+
+        function selectAllStatuses() {
+            activeStatuses = [...filterOrder];
+            renderFilterCheckboxes();
+            renderAppList();
+        }
+        
+        function selectNoneStatuses() {
+            activeStatuses = [];
+            renderFilterCheckboxes();
+            renderAppList();
+        }
+
+        function selectCompanyOnlyStatuses() {
+            const allCompanySelected = companyStatuses.every(status => activeStatuses.includes(status));
+            
+            if (allCompanySelected && activeStatuses.length === companyStatuses.length) {
+                activeStatuses = [];
+            } else {
+                activeStatuses = [...companyStatuses];
+            }
+            
+            renderFilterCheckboxes();
+            renderAppList();
+        }
+        
+        /**
+         * 모든 이벤트 리스너를 초기화 시점에 설정합니다.
+         */
+        function setupEventListeners() {
+            // --- 1. 회사/App 목록 관련 이벤트 ---
+            addAppBtn.addEventListener('click', () => {
+                saveCurrentItem();
+                saveApplicationData();
+                const newApp = defaultApplication(applications.length + 1);
+                applications.push(newApp);
+                selectedAppId = newApp.id;
+                selectedItemIndex = 0;
+                renderAppAndItemData();
+                // ⭐ [수정] 회사 추가 시 알림 제거
+                // showMessageModal('알림', `새 회사 '${newApp.company}'를 추가했습니다.`);
+            });
+
+            removeAppBtn.addEventListener('click', async () => {
+                if (applications.length <= 1) {
+                    showMessageModal('경고', '최소 하나의 회사는 남겨야 합니다.');
+                    return;
+                }
+                const app = getCurrentApplication();
+                const confirmed = await showConfirmModal(`회사 '${app.company}'와 그에 속한 모든 문항을 정말로 삭제하시겠습니까?`);
+                if (confirmed) {
+                    applications = applications.filter(a => a.id !== selectedAppId);
+                    // 새 선택: 첫 번째 회사
+                    selectedAppId = applications[0].id; 
+                    selectedItemIndex = 0;
+                    renderAppAndItemData();
+                    showMessageModal('알림', `'${app.company}'를 삭제했습니다.`);
+                }
+            });
+
+            // --- 2. Middle Sidebar (상세 정보) 관련 이벤트 ---
+            
+            // 회사명 실시간 업데이트 리스너 추가 (on 'input' event)
+            appCompanyInput.addEventListener('input', () => {
+                // 1. 데이터에 현재 값 저장
+                saveApplicationData();
+                // 2. 회사 목록 UI를 다시 그려서 (실시간 반영)
+                renderAppList(); 
+            });
+
+            // 날짜 및 상태 변경 시, 데이터 저장 및 회사 목록 업데이트
+            appDateInput.addEventListener('change', () => {
+                saveApplicationData();
+            });
+            appStatusSelect.addEventListener('change', () => {
+                saveApplicationData();
+            });
+
+
+            // --- 3. 문항 목록 관련 이벤트 ---
+            addItemBtn.addEventListener('click', () => {
+                const app = getCurrentApplication();
+                if (!app) return;
+                
+                saveCurrentItem();
+                
+                const newItem = defaultItem(app.items.length + 1);
+                app.items.push(newItem);
+                selectedItemIndex = app.items.length - 1; // 마지막 항목 선택
+                renderAppAndItemData();
+            });
+            
+            removeItemBtn.addEventListener('click', async () => {
+                const app = getCurrentApplication();
+                if (!app || app.items.length === 0) return;
+                
+                const item = getCurrentItem();
+                const confirmed = await showConfirmModal(`문항 '${item.title}'를 정말로 삭제하시겠습니까?`);
+
+                if (confirmed) {
+                    app.items.splice(selectedItemIndex, 1);
+                    selectedItemIndex = Math.max(0, selectedItemIndex - 1); // 인덱스 조정
+                    renderAppAndItemData();
+                }
+            });
+            
+
+            // --- 4. 문항 편집기 관련 이벤트 (실시간 저장) ---
+            titleInput.addEventListener('input', saveCurrentItem);
+            typeSelect.addEventListener('change', () => {
+                saveCurrentItem();
+                updateBackgroundColor(typeSelect.value); // 배경색 즉시 변경
+            });
+            tagsInput.addEventListener('input', saveCurrentItem);
+            questionTextarea.addEventListener('input', saveCurrentItem);
+            answerTextarea.addEventListener('input', () => {
+                autoExpandQuestionTextarea(questionTextarea);
+                saveCurrentItem();
+                updateCharCount(); // 글자수 실시간 업데이트
+            });
+            
+            readonlyCheckbox.addEventListener('change', () => {
+                saveCurrentItem();
+                updateReadOnlyState(readonlyCheckbox.checked);
+            });
+
+
+            // --- 5. 모달 관련 이벤트 ---
+            modalConfirmBtn.addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                if (modalResolve) modalResolve(true);
+                modalResolve = null;
+            });
+            
+            modalCancelBtn.addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                if (modalResolve) modalResolve(false);
+                modalResolve = null;
+            });
+
+            messageModalCloseBtn.addEventListener('click', () => {
+                messageModal.classList.add('hidden');
+                messageModal.classList.remove('flex');
+            });
+            
+            // --- 6. 저장/불러오기 관련 이벤트 ---
+            saveDataBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 버튼 클릭 시 드롭다운 토글
+                toggleSaveDropdown();
+            });
+            document.addEventListener('click', (e) => {
+                // 드롭다운 외부 클릭 시 드롭다운 닫기
+                if (!saveDataBtn.contains(e.target) && !saveDropdown.contains(e.target) && !saveDropdown.classList.contains('hidden')) {
+                    toggleSaveDropdown();
+                }
+            });
+
+            saveJsonBtn.addEventListener('click', () => {
+                saveCurrentItem();
+                saveApplicationData();
+                const jsonContent = JSON.stringify(applications, null, 2);
+                downloadData(jsonContent, 'project_data.json', 'application/json');
+                toggleSaveDropdown();
+                showMessageModal('알림', 'JSON 파일 다운로드를 시작합니다.');
+            });
+            
+            saveTextBtn.addEventListener('click', () => {
+                saveCurrentItem();
+                saveApplicationData();
+                const textContent = JSON.stringify(applications, null, 2); // 텍스트 파일도 JSON 형태로 저장
+                downloadData(textContent, 'project_data.txt', 'text/plain');
+                toggleSaveDropdown();
+                showMessageModal('알림', 'Text 파일 다운로드를 시작합니다.');
+            });
+
+            loadDataBtn.addEventListener('click', () => {
+                fileLoader.click();
+            });
+            
+            fileLoader.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const loadedData = JSON.parse(e.target.result);
+                        
+                        // 데이터 유효성 검사 (최소한의 구조 확인)
+                        if (Array.isArray(loadedData) && loadedData.every(item => 'id' in item && 'company' in item)) {
+                            const confirmed = await showConfirmModal('현재 편집 중인 데이터가 모두 대체됩니다. 계속하시겠습니까?');
+                            
+                            if (confirmed) {
+                                applications = loadedData;
+                                selectedAppId = applications[0]?.id; 
+                                selectedItemIndex = 0;
+                                renderAppAndItemData();
+                                showMessageModal('성공', '데이터를 성공적으로 불러왔습니다.');
+                            }
+                        } else {
+                            showMessageModal('오류', '불러온 파일의 데이터 형식이 올바르지 않습니다.');
+                        }
+                    } catch (error) {
+                        showMessageModal('오류', '파일을 읽거나 처리하는 중 오류가 발생했습니다.');
+                        console.error("File loading error:", error);
+                    }
+                };
+                reader.readAsText(file);
+            });
+            
+            // --- 7. 필터 메뉴 관련 이벤트 ---
+            filterToggleButton.addEventListener('click', () => toggleFilterMenu());
+            closeFilterBtn.addEventListener('click', () => toggleFilterMenu(false));
+            selectAllBtn.addEventListener('click', selectAllStatuses);
+            selectNoneBtn.addEventListener('click', selectNoneStatuses);
+            selectCompanyOnlyBtn.addEventListener('click', selectCompanyOnlyStatuses);
+            
+            // --- 8. 검색 메뉴 관련 이벤트 ---
+            searchToggleButton.addEventListener('click', () => toggleSearchMenu());
+            closeSearchBtn.addEventListener('click', () => toggleSearchMenu(false));
+            
+            // 검색 필터 모달
+            openSearchFilterModalBtn.addEventListener('click', () => {
+                renderSearchFilterCheckboxes();
+                searchFilterModal.classList.remove('hidden');
+                searchFilterModal.classList.add('flex');
+            });
+            searchFilterModalCloseBtn.addEventListener('click', () => {
+                searchFilterModal.classList.add('hidden');
+                searchFilterModal.classList.remove('flex');
+                
+                // 필터 설정 변경 시 검색 재실행
+                if (lastSearchQuery) {
+                    performSearch(lastSearchQuery);
+                }
+            });
+            
+            // 검색 입력 필드 (input 이벤트로 실시간 검색)
+            searchInput.addEventListener('input', (event) => {
+                performSearch(event.target.value);
+            });
+
+            // 질문/답변 필드 변경 시 데이터 저장 및 글자 수 업데이트
+            questionTextarea.addEventListener('input', () => {
+                autoExpandQuestionTextarea(questionTextarea); // [MODIFIED] 자동 확장 기능 추가
+                saveCurrentItem();
+                updateCharCount();
+            });
+            answerTextarea.addEventListener('input', () => {
+                saveCurrentItem();
+                updateCharCount();
+            });
+        }
+        
+        /**
+         * 앱 초기화 함수: 데이터 로드 및 UI 렌더링을 담당합니다.
+         */
+        function initializeApp() {
+            // 초기 데이터 설정
+            if (applications.length === 0) {
+                const newApp = defaultApplication(1);
+                applications.push(newApp);
+                selectedAppId = newApp.id;
+            } else {
+                selectedAppId = applications[0].id;
+                selectedItemIndex = 0;
+            }
+            
+            // 모든 이벤트 리스너 설정
+            setupEventListeners();
+            
+            // 초기 UI 렌더링
+            renderAppAndItemData();
+            
+            // 초기 필터 상태 (전체 선택)
+            selectAllStatuses();
+        }
+
+        // 앱 초기화
+        window.onload = initializeApp;
+
+    </script>
+</body>
+</html>
